@@ -1,5 +1,6 @@
 import pygame
 import mapa
+import animacao
 import os
 
 # CONSTANTES
@@ -33,10 +34,6 @@ INFORMACOES_MAPA = [
     [10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10]
 ]
 
-# CARREGAMENTO DE IMAGENS
-imagem_jogador = pygame.image.load(os.path.join(DIR_IMAGENS, 'quadrado.png'))
-imagem_jogador = pygame.transform.scale(imagem_jogador, (50, 50))
-
 # INICIALIZACAO
 pygame.init()
 tela = pygame.display.set_mode(DIMENSOES_TELA)
@@ -45,15 +42,19 @@ relogio = pygame.time.Clock()
 rodar = True
 
 class Jogador:
-    def __init__(self, x, y, imagem):
+    def __init__(self, x, y):
+        self.SPRITES_JOGADOR = animacao.carregar_sprites_jogador([DIR_IMAGENS, 'jogador'], 32, 32, True)
+        self.DELAY_ANIMACAO = 5
         self.x = x
         self.y = y
-        self.imagem = imagem
+        self.imagem = self.SPRITES_JOGADOR['idle_direita'][0]
         self.rect = self.imagem.get_rect()
         self.largura = self.imagem.get_width()
         self.altura = self.imagem.get_height()
         self.vel_y = 0 # e a velocidade com a qual o jogador e deslocado no eixo y
         self.tocando_chao = False
+        self.direcao = 'direita'
+        self.cont_animacao = 0
     
     def update(self):
         delta_x = 0
@@ -68,42 +69,60 @@ class Jogador:
         tecla_pressionada = pygame.key.get_pressed()
         if tecla_pressionada[pygame.K_LEFT] == True:
             delta_x -= 5
+            self.direcao = 'esquerda'
         if tecla_pressionada[pygame.K_RIGHT] == True:
             delta_x += 5
-
-        # AS COLISOES COM AS NOVAS PLATAFORMAS SERAO TRATADAS NA PROXIMA AULA DO MINI CURSO DE CAPACITACAO
-        ''' 
+            self.direcao = 'direita'
+        
         # checar colisoes no eixo y
-        for plataforma in lista_plataformas:
-            if plataforma.colliderect(pygame.rect.Rect(self.rect.x, (self.rect.y + delta_y), self.largura, self.altura)):
+        for bloco in lista_blocos:
+            if bloco.rect.colliderect(pygame.rect.Rect(self.rect.x, (self.rect.y + delta_y), self.largura, self.altura)):
                 if self.vel_y > 0: # jogador esta caindo
-                    delta_y = plataforma.top - self.rect.bottom
+                    self.vel_y = 0
+                    delta_y = bloco.rect.top - self.rect.bottom
                     self.tocando_chao = True # jogador esta tocando no chao
+                elif self.vel_y < 0: # jogador esta subindo
+                    self.vel_y = 0
+                    delta_y = bloco.rect.bottom - self.rect.top
                 break
         
         # checar colisoes no eixo x
-        for plataforma in lista_plataformas:
-            if plataforma.colliderect(pygame.rect.Rect((self.rect.x + delta_x), self.rect.y, self.largura, self.altura)):
+        for bloco in lista_blocos:
+            if bloco.rect.colliderect(pygame.rect.Rect((self.rect.x + delta_x), self.rect.y, self.largura, self.altura)):
                 if delta_x > 0: # jogador esta indo para direita
-                    delta_x = plataforma.left - self.rect.right
+                    delta_x = bloco.rect.left - self.rect.right
                 elif delta_x < 0: # jogador esta indo para esquerda
-                    delta_x = plataforma.right - self.rect.left
+                    delta_x = bloco.rect.right - self.rect.left
                 break
-        '''
+        
+        # atualizar sprite do jogador
+        self.update_sprite(delta_x, delta_y)
+        
         # atualizar coordenadas do jogador
         self.x += delta_x
         self.y += delta_y
         self.rect.topleft = (self.x, self.y)
     
+    def update_sprite(self, desl_x, desl_y):
+        if desl_y > 0:
+            spritesheet = 'fall'
+        elif desl_y < 0:
+            spritesheet = 'jump'
+        elif desl_x != 0 and self.tocando_chao == True:
+            spritesheet = 'run'
+        else:
+            spritesheet = 'idle'
+        
+        nome_da_spritesheet = spritesheet + '_' + self.direcao
+        sprites  = self.SPRITES_JOGADOR[nome_da_spritesheet]
+        sprite_index = (self.cont_animacao // self.DELAY_ANIMACAO) % len(sprites)
+        self.imagem = sprites[sprite_index]
+        self.cont_animacao += 1
+
     def desenhar(self, tela):
         tela.blit(self.imagem, (self.rect.x, self.rect.y))
 
-lista_plataformas = [
-    pygame.rect.Rect(0, 350, DIMENSOES_TELA[0], 50),
-    pygame.rect.Rect(100, 50, 100, 300)
-]
-
-jogador = Jogador(400, 0, imagem_jogador)
+jogador = Jogador(400, 0)
 
 tilemap = mapa.TileMap(DIR_PRINCIPAL, TAMANHO_BLOCO, INFORMACOES_MAPA)
 lista_blocos = tilemap.gerar() # gerando  a lista de blocos que sera usada para as colisoes
@@ -127,9 +146,5 @@ while rodar:
     tilemap.desenhar(tela,lista_blocos)
 
     jogador.desenhar(tela)
-
-    # desenhar plataformas
-    #for plataforma in lista_plataformas:
-    #    pygame.draw.rect(tela, VERDE, plataforma)
 
     pygame.display.update()
